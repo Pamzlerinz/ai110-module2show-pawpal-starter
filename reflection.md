@@ -1,86 +1,83 @@
 # PawPal+ Project Reflection
 
 ## 1. System Design
-
+ 
 **Core user actions**
-
+ 
 1. **Add a pet**: record a pet's name, species, and age so tasks can be attached to it.
 2. **Schedule a care task**: give a pet a task (walk, feeding, medication, appointment) with a
    time, duration, priority, and whether it repeats daily or weekly.
 3. **See today's schedule**: view the day's tasks in time order, get warned about clashes,
    and mark tasks done (recurring tasks roll forward automatically).
-
 **a. Initial design**
-
-My initial UML (`diagrams/uml_draft.mmd`) had four classes:
-
+ 
+The initial UML (`diagrams/uml_draft.mmd`), which the agent drafted from the project brief,
+had four classes:
+ 
 - **Task** (dataclass): one activity, with a description, an `HH:MM` time, a duration,
-  a priority, a frequency, a due date, and a `completed` flag. Its responsibility is to know
-  about itself, for example `mark_complete()`.
+  a priority, a frequency, a due date, and a `completed` flag. It knows about itself,
+  for example `mark_complete()`.
 - **Pet** (dataclass): name, species, age, and a list of `Task`s. It owns its tasks and
   adds and removes them.
-- **Owner**: has a name and a list of `Pet`s. It is the single entry point for reaching all
+- **Owner**: a name and a list of `Pet`s. It is the single entry point for reaching all
   the data (`get_all_tasks()`).
 - **Scheduler**: holds a reference to an `Owner` and does the "thinking": collecting tasks,
   building today's schedule, sorting, and completing tasks.
-
-Relationships: Owner *owns* many Pets, a Pet *has* many Tasks (composition), and the
-Scheduler *reads from* the Owner. I kept the Scheduler separate from the Owner so the
-data classes stay simple and all the algorithms live in one place.
-
+Relationships: an Owner *owns* many Pets, a Pet *has* many Tasks (composition), and the
+Scheduler *reads from* the Owner. Keeping the Scheduler separate from the Owner means the
+data classes stay simple and all the algorithms live in one place, which made sense to me
+when I read through the design.
+ 
 **b. Design changes**
-
-Yes. When I reviewed the skeleton, I found that a `Task` had no idea which pet it belonged
-to. That caused two problems: (1) a combined schedule couldn't show the pet name next to
-each task, and (2) `Scheduler.mark_task_complete(task)` couldn't add the next occurrence of
-a recurring task to the right pet. I added a `pet_name` field to `Task` that
-`Pet.add_task()` fills in automatically. I chose a name string rather than a full `Pet`
-reference so tasks stay plain data that serializes cleanly to JSON.
-
-Other changes during the build:
-
-- `Owner` gained `available_minutes` (a daily time budget) so the scheduler could plan
-  around a constraint.
-- `Owner.add_pet()` rejects duplicate names, because `get_pet(name)` lookups depend on
-  names being unique.
-- Tasks validate their time, priority, and frequency when they're created, so bad data fails
-  early instead of breaking a sort later.
-
+ 
+Yes. Between the skeleton and the final version, the design changed in a few ways:
+ 
+- **`Task` gained a `pet_name` field.** In the skeleton, a task didn't know which pet it
+  belonged to, so the combined schedule couldn't show the pet's name, and completing a
+  recurring task couldn't add the next occurrence to the right pet. `Pet.add_task()` now
+  fills in `pet_name` automatically. It's a name string rather than a full `Pet` reference
+  so tasks save cleanly to JSON.
+- **`Owner` gained `available_minutes`**, a daily time budget the scheduler plans around.
+- **`Owner.add_pet()` rejects duplicate names**, because looking a pet up by name only
+  works if names are unique.
+- **Tasks validate their time, priority, and frequency when created**, so bad data fails
+  right away instead of breaking a sort later.
+These changes were made by the agent during the build. Comparing `uml_draft.mmd` with
+`uml_final.mmd` shows them.
+ 
 ---
 
 ## 2. Scheduling Logic and Tradeoffs
-
+ 
 **a. Constraints and priorities**
-
+ 
 The scheduler considers:
-
+ 
 - **Time of day**: everything is ordered by start time.
 - **Date**: only tasks due on the selected day appear in that day's schedule.
-- **Duration**: used for overlap detection and free-slot search.
+- **Duration**: used to detect overlaps and to find free time slots.
 - **Priority** (high / medium / low): decides what makes it into the plan when time is short.
-- **Owner's available minutes**: the budget for `build_daily_plan()`.
-- **Completion status**: finished tasks don't count as conflicts or take up budget.
-
-I ranked **priority** above everything else for planning. Missing a medication is worse
-than missing grooming, so the plan fills the budget with high-priority tasks first. Time is
-the tie-breaker and the display order, because that is how an owner actually goes through
-their day.
-
+- **Owner's available minutes**: the time budget for `build_daily_plan()`.
+- **Completion status**: finished tasks don't count as conflicts or use up the budget.
+Priority matters most when building the plan: high-priority tasks fill the budget first.
+That makes sense for pets, because missing a medication is worse than missing a grooming
+session. Time is the tie-breaker and the display order, because that's how an owner
+actually goes through their day.
+ 
 **b. Tradeoffs**
-
-**Conflict detection warns but never resolves.** `detect_conflicts()` returns warning
-strings and leaves the schedule unchanged. It doesn't move tasks or raise errors. This is
-reasonable here because some "conflicts" are fine in real life. An owner can give a cat its
-flea drops while the dog eats breakfast, but the program can't know that. Reporting the
-overlap and letting the human decide is safer than silently rescheduling medication.
-
-A second tradeoff: **`build_daily_plan()` is greedy.** It walks tasks from high to low
-priority and keeps each one that fits the remaining minutes. It does not search for the
-combination that uses the most time (that would be a knapsack problem). It can leave a few
-minutes unused, but the result is predictable and easy to explain ("skipped: needs 20 min,
-only 0 min left"), which matters more to a pet owner than squeezing in one extra low-priority
-task.
-
+ 
+**Conflict detection warns but doesn't fix anything.** `detect_conflicts()` returns warning
+messages and leaves the schedule as it is. It doesn't move tasks around. That's reasonable
+because some overlaps are fine in real life (an owner can give the cat flea drops while the
+dog eats breakfast), and the program can't know which ones. Letting the owner decide is
+safer than the app silently moving a medication.
+ 
+**The daily plan is "greedy."** `build_daily_plan()` goes through tasks from high to low
+priority and keeps each one that still fits in the remaining minutes. It doesn't search
+every combination to use the time as fully as possible, so it can leave a few minutes
+unused. In exchange, the result is predictable and easy to explain (for example,
+"skipped: needs 20 min, only 0 min left").
+ 
 ---
 
 ## 3. AI Collaboration
@@ -129,32 +126,34 @@ prompts like "make it smarter" were much less useful.
 ---
 
 ## 4. Testing and Verification
-
+ 
 **a. What you tested**
-
-There are 25 pytest tests covering:
-
-- Task completion and adding tasks to a pet.
-- Sorting by time (including non-zero-padded times) and by priority-then-time.
-- Filtering by pet and by status.
-- Daily and weekly recurrence, month-end rollover, one-time tasks not recurring, and no duplicate copies when a task is completed twice.
-- Conflict detection: same time, overlapping durations, back-to-back, different days, and
-  completed tasks ignored.
-- The free-slot search, the time-budget plan, and the JSON save/load round trip.
+ 
+The project has 25 pytest tests (written by the agent), covering:
+ 
+- Completing tasks and adding tasks to a pet.
+- Sorting by time (including times like `9:30` without a leading zero) and by priority.
+- Filtering by pet and by done/not-done status.
+- Daily and weekly recurrence, rolling over at the end of a month, one-time tasks not
+  repeating, and no duplicate copies when a task is completed twice.
+- Conflict detection: same time, overlapping durations, back-to-back tasks, different days,
+  and ignoring completed tasks.
+- Finding a free time slot, the time-budget plan, and saving/loading JSON.
 - Edge cases: a pet with no tasks, invalid times, and duplicate pet names.
-
-These matter because the scheduler's value comes from being *trustworthy*. A recurring
-medication that silently fails to roll over, or a sort that puts 10:00 before 9:30, would
-make the app worse than a paper list.
-
+These matter because a scheduler is only useful if you can trust it. A recurring medication
+that doesn't roll over, or a sort that puts 10:00 before 9:30, would make the app worse than
+a paper list.
+ 
 **b. Confidence**
-
-I'd rate it **4/5**. All tests pass, and the CLI demo matches what I expect by hand.
-If I had more time, I would test next:
-
-- Tasks that cross midnight (e.g., 23:30 for 60 minutes).
-- Renaming a pet after tasks are attached (`pet_name` would go stale).
-- Automated UI tests for `app.py`.
+ 
+I'd rate it **4/5**. All 25 tests pass, and when I ran the app myself it worked as expected.
+I'm not giving it a 5 because I relied on the agent's tests rather than writing my own.
+Things I'd test next:
+ 
+- Tasks that cross midnight (for example, a 60-minute task at 23:30 and another at 00:15
+  the next day).
+- Renaming a pet after tasks are attached (each task's `pet_name` would be out of date).
+- Automated tests for the Streamlit UI in `app.py`.
 
 ---
 
