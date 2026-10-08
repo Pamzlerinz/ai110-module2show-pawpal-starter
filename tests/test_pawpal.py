@@ -150,6 +150,15 @@ def test_completing_one_time_task_does_not_recur(owner, scheduler):
     assert mochi.task_count() == 1
 
 
+def test_completing_task_twice_does_not_duplicate_next_occurrence(owner, scheduler):
+    mochi = owner.get_pet("Mochi")
+    walk = Task("Walk", "08:00", frequency="daily", due_date=DAY)
+    mochi.add_task(walk)
+    scheduler.mark_task_complete(walk)
+    assert scheduler.mark_task_complete(walk) is None
+    assert mochi.task_count() == 2
+
+
 # --- conflict detection ---------------------------------------------------
 
 def test_detects_exact_same_time_across_pets(owner, scheduler):

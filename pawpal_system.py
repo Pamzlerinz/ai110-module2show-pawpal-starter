@@ -225,6 +225,8 @@ class Scheduler:
 
     def mark_task_complete(self, task: Task) -> Task | None:
         """Complete a task; for daily/weekly tasks, add and return the next occurrence."""
+        if task.completed:
+            return None  # already done; don't spawn a duplicate next occurrence
         task.mark_complete()
         next_task = task.next_occurrence()
         if next_task is not None:
