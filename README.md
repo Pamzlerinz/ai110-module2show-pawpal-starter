@@ -59,9 +59,18 @@ See [`diagrams/uml_final.mmd`](diagrams/uml_final.mmd) for the full class diagra
 - **Time-budget daily plan**: picks the highest-priority tasks that fit in the owner's
   available minutes and explains why each task was included or skipped.
 - **JSON persistence**: pets and tasks are saved to `data.json` and reloaded on the next run.
-- **Formatted output**: emoji task icons, color-coded priority dots, and aligned CLI tables
-  (plain f-string formatting in `main.py`, no extra libraries). In the UI, `st.dataframe`,
-  `st.warning`, and `st.success` are used.
+- **Formatted output**: emoji task icons, color-coded priority dots, and aligned CLI tables.
+  See the Output Formatting section below.
+
+## 🎨 Output Formatting
+
+| Feature | Where | How |
+|---------|-------|-----|
+| Emoji task icons (🦮 walk, 🍖 food, 💊 meds, 🏥 vet, 🛁 grooming, 🎾 play) | `task_icon()` in `main.py` | Keyword match on the task description |
+| Color-coded priority (🔴 high, 🟡 medium, 🟢 low) | `PRIORITY_ICON` in `main.py` and `app.py` | Lookup dict |
+| Status indicators (✅ done / ⏳ todo) | `print_tasks()` in `main.py`, `task_rows()` in `app.py` | Based on `Task.completed` |
+| Aligned CLI tables | `print_tasks()` in `main.py` | f-string width specifiers (`:<6`, `:>4`), no external library |
+| UI tables and alerts | `app.py` | `st.dataframe`, `st.warning` (conflicts and skipped tasks), `st.success` (completions and free slots), `st.info`, `st.error` |
 
 ## 📐 Smarter Scheduling
 
